@@ -15,9 +15,9 @@ provider "aws" {
 
 // Create a VPC
 resource "aws_vpc" "cnn4" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block                       = "10.0.0.0/16"
   assign_generated_ipv6_cidr_block = true
-  enable_dns_hostnames = true
+  enable_dns_hostnames             = true
 
   tags = {
     Name = "cnn4"
@@ -25,10 +25,10 @@ resource "aws_vpc" "cnn4" {
 }
 
 resource "aws_subnet" "public1" {
-  vpc_id     = aws_vpc.cnn4.id
-  cidr_block = "10.0.1.0/24"
-  ipv6_cidr_block = cidrsubnet(aws_vpc.cnn4.ipv6_cidr_block, 8, 1)
-  map_public_ip_on_launch = true
+  vpc_id                          = aws_vpc.cnn4.id
+  cidr_block                      = "10.0.1.0/24"
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.cnn4.ipv6_cidr_block, 8, 1)
+  map_public_ip_on_launch         = true
   assign_ipv6_address_on_creation = true
 
   tags = {
@@ -37,10 +37,10 @@ resource "aws_subnet" "public1" {
 }
 
 resource "aws_subnet" "public2" {
-  vpc_id     = aws_vpc.cnn4.id
-  cidr_block = "10.0.2.0/24"
-  ipv6_cidr_block = cidrsubnet(aws_vpc.cnn4.ipv6_cidr_block, 8, 2)
-  map_public_ip_on_launch = true
+  vpc_id                          = aws_vpc.cnn4.id
+  cidr_block                      = "10.0.2.0/24"
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.cnn4.ipv6_cidr_block, 8, 2)
+  map_public_ip_on_launch         = true
   assign_ipv6_address_on_creation = true
 
   tags = {
@@ -105,7 +105,7 @@ data "aws_iam_policy_document" "ecs_tasks_execution_role" {
 
 resource "aws_iam_role" "ecs_tasks_execution_role" {
   name               = "ecsTasksExecutionRoleTF"
-  assume_role_policy = "${data.aws_iam_policy_document.ecs_tasks_execution_role.json}"
+  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_execution_role.json
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_tasks_execution_role_private_ecr" {
@@ -126,8 +126,8 @@ resource "aws_ecs_task_definition" "otel3" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_tasks_execution_role.arn
-  
-  
+
+
 
   container_definitions = jsonencode([
     {
@@ -179,10 +179,22 @@ resource "aws_ecs_service" "otel3_service" {
   task_definition = aws_ecs_task_definition.otel3.arn
   desired_count   = 1
   launch_type     = "FARGATE"
-  
+
   network_configuration {
-    security_groups = [aws_security_group.otel3.id]
-    subnets = [aws_subnet.public1.id, aws_subnet.public2.id]
+    security_groups  = [aws_security_group.otel3.id]
+    subnets          = [aws_subnet.public1.id, aws_subnet.public2.id]
     assign_public_ip = true
   }
 }
+
+
+# create a load balancer
+
+# resource "aws_lb" "alb" {
+#   name               = "alb1"
+#   internal           = false
+#   subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
+#   load_balancer_type = "application"
+#   security_groups    = [aws_security_group.otel3.id]
+
+# }
