@@ -185,16 +185,82 @@ resource "aws_ecs_service" "otel3_service" {
     subnets          = [aws_subnet.public1.id, aws_subnet.public2.id]
     assign_public_ip = true
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.otelecs.arn
+    container_name   = "otel3"
+    container_port   = 9876
+  }
 }
 
 
 # create a load balancer
 
-# resource "aws_lb" "alb" {
-#   name               = "alb1"
-#   internal           = false
-#   subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
-#   load_balancer_type = "application"
-#   security_groups    = [aws_security_group.otel3.id]
+resource "aws_security_group" "otel3_alb" {
+  name        = "otel3_alb"
+  description = "otel3_alb"
+  vpc_id      = aws_vpc.cnn4.id
 
-# }
+  ingress {
+    description      = "All from internet to LB "
+    from_port        = 80
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "otel3_alb"
+  }
+}
+
+resource "aws_lb" "otelecs" {
+  name               = "otelecs"
+  internal           = false
+  subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.otel3_alb.id]
+
+}
+
+resource "aws_lb_target_group" "otelecs" {
+  name     = "otel-tg"
+  port     = 9876
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.cnn4.id
+  target_type = "ip"
+  
+
+  health_check {
+    path                = "/"
+    interval            = 60
+    port                = 9876
+    protocol            = "HTTP"
+    timeout             = 3
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    matcher             = "200-299"
+  }
+}
+
+resource "aws_lb_listener" "otelecs" {
+  load_balancer_arn = aws_lb.otelecs.arn
+  port              = "80"
+  protocol          = "HTTP"
+  # ssl_policy        = "ELBSecurityPolicy-2016-08"
+  # certificate_arn   = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.otelecs.arn
+  }
+}
