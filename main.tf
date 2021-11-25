@@ -14,20 +14,20 @@ provider "aws" {
 
 
 // Create a VPC
-resource "aws_vpc" "cnn4" {
+resource "aws_vpc" "cnn" {
   cidr_block                       = "10.0.0.0/16"
   assign_generated_ipv6_cidr_block = true
   enable_dns_hostnames             = true
 
   tags = {
-    Name = "cnn4"
+    Name = "cnn"
   }
 }
 
 resource "aws_subnet" "public1" {
-  vpc_id                          = aws_vpc.cnn4.id
+  vpc_id                          = aws_vpc.cnn.id
   cidr_block                      = "10.0.1.0/24"
-  ipv6_cidr_block                 = cidrsubnet(aws_vpc.cnn4.ipv6_cidr_block, 8, 1)
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.cnn.ipv6_cidr_block, 8, 1)
   map_public_ip_on_launch         = true
   assign_ipv6_address_on_creation = true
 
@@ -37,9 +37,9 @@ resource "aws_subnet" "public1" {
 }
 
 resource "aws_subnet" "public2" {
-  vpc_id                          = aws_vpc.cnn4.id
+  vpc_id                          = aws_vpc.cnn.id
   cidr_block                      = "10.0.2.0/24"
-  ipv6_cidr_block                 = cidrsubnet(aws_vpc.cnn4.ipv6_cidr_block, 8, 2)
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.cnn.ipv6_cidr_block, 8, 2)
   map_public_ip_on_launch         = true
   assign_ipv6_address_on_creation = true
 
@@ -49,15 +49,15 @@ resource "aws_subnet" "public2" {
 }
 
 resource "aws_internet_gateway" "igw1" {
-  vpc_id = aws_vpc.cnn4.id
+  vpc_id = aws_vpc.cnn.id
 }
 
 resource "aws_egress_only_internet_gateway" "eigw1" {
-  vpc_id = aws_vpc.cnn4.id
+  vpc_id = aws_vpc.cnn.id
 }
 
 resource "aws_route_table" "public_route" {
-  vpc_id = aws_vpc.cnn4.id
+  vpc_id = aws_vpc.cnn.id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -83,8 +83,8 @@ resource "aws_route_table_association" "public2" {
 
 # Create ECS cluster
 
-resource "aws_ecs_cluster" "cnn4" {
-  name = "cnn4"
+resource "aws_ecs_cluster" "cnn" {
+  name = "cnn"
 
   setting {
     name  = "containerInsights"
@@ -119,8 +119,8 @@ resource "aws_iam_role_policy_attachment" "ecs_tasks_execution_role_public_ecr" 
 }
 
 
-resource "aws_ecs_task_definition" "otel3" {
-  family                   = "otel3"
+resource "aws_ecs_task_definition" "otel1" {
+  family                   = "otel1"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
@@ -131,7 +131,7 @@ resource "aws_ecs_task_definition" "otel3" {
 
   container_definitions = jsonencode([
     {
-      name  = "otel3"
+      name  = "otel1"
       image = "public.ecr.aws/p6d6n2q4/otel1:v12"
 
       essential = true
@@ -146,18 +146,18 @@ resource "aws_ecs_task_definition" "otel3" {
   ])
 }
 
-resource "aws_security_group" "otel3" {
-  name        = "otel3"
-  description = "otel3"
-  vpc_id      = aws_vpc.cnn4.id
+resource "aws_security_group" "otel1" {
+  name        = "otel1"
+  description = "otel1"
+  vpc_id      = aws_vpc.cnn.id
 
   ingress {
-    description      = "All from VPC for otel3"
+    description      = "All from VPC for otel1"
     from_port        = 9876
     to_port          = 9876
     protocol         = "tcp"
-    cidr_blocks      = [aws_vpc.cnn4.cidr_block]
-    ipv6_cidr_blocks = [aws_vpc.cnn4.ipv6_cidr_block]
+    cidr_blocks      = [aws_vpc.cnn.cidr_block]
+    ipv6_cidr_blocks = [aws_vpc.cnn.ipv6_cidr_block]
   }
 
   egress {
@@ -169,26 +169,30 @@ resource "aws_security_group" "otel3" {
   }
 
   tags = {
-    Name = "otel3"
+    Name = "otel1"
   }
 }
 
-resource "aws_ecs_service" "otel3_service" {
-  name            = "otel3"
-  cluster         = aws_ecs_cluster.cnn4.id
-  task_definition = aws_ecs_task_definition.otel3.arn
+resource "aws_ecs_service" "otel1_service" {
+  name            = "otel1"
+  cluster         = aws_ecs_cluster.cnn.id
+  task_definition = aws_ecs_task_definition.otel1.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
+  deployment_controller {
+    type = "CODE_DEPLOY"
+  }
+
   network_configuration {
-    security_groups  = [aws_security_group.otel3.id]
+    security_groups  = [aws_security_group.otel1.id]
     subnets          = [aws_subnet.public1.id, aws_subnet.public2.id]
     assign_public_ip = true
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.otelecs.arn
-    container_name   = "otel3"
+    target_group_arn = aws_lb_target_group.otelecsblue.arn
+    container_name   = "otel1"
     container_port   = 9876
   }
 }
@@ -196,10 +200,10 @@ resource "aws_ecs_service" "otel3_service" {
 
 # create a load balancer
 
-resource "aws_security_group" "otel3_alb" {
-  name        = "otel3_alb"
-  description = "otel3_alb"
-  vpc_id      = aws_vpc.cnn4.id
+resource "aws_security_group" "otel1_alb" {
+  name        = "otel1_alb"
+  description = "otel1_alb"
+  vpc_id      = aws_vpc.cnn.id
 
   ingress {
     description      = "All from internet to LB "
@@ -219,7 +223,7 @@ resource "aws_security_group" "otel3_alb" {
   }
 
   tags = {
-    Name = "otel3_alb"
+    Name = "otel1_alb"
   }
 }
 
@@ -228,15 +232,15 @@ resource "aws_lb" "otelecs" {
   internal           = false
   subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.otel3_alb.id]
+  security_groups    = [aws_security_group.otel1_alb.id]
 
 }
 
-resource "aws_lb_target_group" "otelecs" {
-  name     = "otel-tg"
+resource "aws_lb_target_group" "otelecsblue" {
+  name     = "otelecsblue"
   port     = 9876
   protocol = "HTTP"
-  vpc_id   = aws_vpc.cnn4.id
+  vpc_id   = aws_vpc.cnn.id
   target_type = "ip"
   
 
@@ -252,7 +256,27 @@ resource "aws_lb_target_group" "otelecs" {
   }
 }
 
-resource "aws_lb_listener" "otelecs" {
+resource "aws_lb_target_group" "otelecsgreen" {
+  name     = "otelecsgreen"
+  port     = 9876
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.cnn.id
+  target_type = "ip"
+  
+
+  health_check {
+    path                = "/"
+    interval            = 60
+    port                = 9876
+    protocol            = "HTTP"
+    timeout             = 3
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    matcher             = "200-299"
+  }
+}
+
+resource "aws_lb_listener" "otelecsblue" {
   load_balancer_arn = aws_lb.otelecs.arn
   port              = "80"
   protocol          = "HTTP"
@@ -261,6 +285,19 @@ resource "aws_lb_listener" "otelecs" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.otelecs.arn
+    target_group_arn = aws_lb_target_group.otelecsblue.arn
+  }
+}
+
+resource "aws_lb_listener" "otelecsgreen" {
+  load_balancer_arn = aws_lb.otelecs.arn
+  port              = "81"
+  protocol          = "HTTP"
+  # ssl_policy        = "ELBSecurityPolicy-2016-08"
+  # certificate_arn   = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.otelecsgreen.arn
   }
 }
